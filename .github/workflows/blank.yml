@@ -1,0 +1,59 @@
+name: Build V8
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-v8:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/powershell
+          df -h
+
+      - name: Build V8 Docker image
+        run: |
+          docker build \
+            --progress=plain \
+            -t v8-dev .
+
+      - name: Create V8 container
+        run: |
+          docker create \
+            --name v8-export \
+            v8-dev
+
+      - name: Export V8 SDK
+        run: |
+          mkdir -p v8-sdk
+          docker cp v8-export:/output/. ./v8-sdk/
+
+      - name: Show V8 SDK
+        run: |
+          echo "V8 SDK contents:"
+          find v8-sdk -maxdepth 3 -type f | sort
+          du -sh v8-sdk
+
+      - name: Upload V8 SDK
+        uses: actions/upload-artifact@v4
+        with:
+          name: v8-sdk
+          path: v8-sdk/
+          retention-days: 30
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f v8-export 2>/dev/null || true
